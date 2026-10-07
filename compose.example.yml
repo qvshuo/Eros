@@ -1,0 +1,22 @@
+services:
+  eros:
+    image: eros:0.2.0
+    build: .
+    restart: unless-stopped
+    ports: ["0.0.0.0:9307:9307"]
+    volumes:
+      - /path/to/library:/media:ro # 改为视频、STRM 所在的实际目录
+      - ./data:/data # 需对 UID 1000 可写
+    environment: {TZ: Asia/Shanghai}
+    depends_on:
+      flaresolverr: {condition: service_healthy}
+  flaresolverr:
+    image: ghcr.io/flaresolverr/flaresolverr:latest
+    restart: unless-stopped
+    environment: {TZ: Asia/Shanghai}
+    volumes: ["./data/flaresolverr:/config"]
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8191/"]
+      interval: 5s
+      timeout: 5s
+      retries: 10

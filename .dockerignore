@@ -1,0 +1,9 @@
+**
+!Dockerfile
+!requirements.txt
+!eros_scraper/
+!eros_scraper/**
+!emby-plugin/
+!emby-plugin/**
+**/__pycache__/
+**/.DS_Store

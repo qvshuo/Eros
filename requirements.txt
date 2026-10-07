@@ -1,0 +1,6 @@
+scrapling[fetchers]>=0.4.15,<0.5
+httpx>=0.28.1,<0.29
+pydantic>=2.12,<3
+pillow>=12.1.1,<13
+fastapi>=0.142.2
+uvicorn>=0.54.0
