@@ -22,7 +22,7 @@ docker compose up -d --build
 
 1. 设置作品扫描目录并执行刮削。Eros 按视频或 STRM 所在目录名（番号）获取元数据，将 NFO 和原图保存到 `data/metadata`。
 
-2. 下载 [Eros.Emby.dll](emby-plugin/Eros.Emby.dll?raw=true)，放入 Emby 插件目录。Docker 部署时，若配置挂载为 `/path/to/emby/config:/config`，则放入 `/path/to/emby/config/plugins/Eros.Emby.dll`。
+2. 下载 [Eros.dll](emby-plugin/Eros.dll?raw=true)，放入 Emby 插件目录，升级时先移除旧版插件 DLL。Docker 部署时，若配置挂载为 `/path/to/emby/config:/config`，则放入 `/path/to/emby/config/plugins/Eros.dll`。
 
 3. 在 Emby 的 Compose 中增加以下挂载，将 `/path/to/Eros` 替换为 Eros 的宿主机绝对路径：
 

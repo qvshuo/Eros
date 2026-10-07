@@ -2,7 +2,7 @@
 
 - Runtime: Docker Compose, Python 3.14/pip, file storage. Prefer development and verification on the real Docker host. Local Python checks always use `uv run --no-project --python 3.14`; do not commit its environment, lockfile or caches.
 - Keep metadata folders limited to NFO and original images. Runtime state lives in `/data/state`, isolated by metadata-path hash, and is used only by Eros. The plugin reads its configured metadata directory (default `/eros-metadata`) directly, matches directory names/NFO IDs literally and never reads scraper state; do not duplicate scraper catalog-format rules in the plugin.
-- Every change to plugin C# code must rebuild and update the tracked `emby-plugin/Eros.Emby.dll`.
+- Every change to plugin C# code must rebuild and update the tracked `emby-plugin/Eros.dll`.
 - `eros_scraper/` handles scraping, processing, state, API and plain HTML/CSS/JS; `emby-plugin/` reads external metadata for Emby.
 - Media is read-only. Exact parent directory names are keys; invalid/duplicate names need user correction. NFO uses uniqueid type Eros, producer studio, publisher, label, genre and tag. Keep genres/tags separate. Preserve publisher/label as distinct extensions, omit duplicate values, and do not map them to Emby studios/tags/genres. NFO and original images use media filename stems; preserve valid previous output on failure.
 - Sources: DMM, JavDB (API then web), JavBus, FC2, AVSOX; JavDB precedes JavBus. Keep full prefixes. Japanese actor names/rules use JSON; runtime settings use TOML and the webpage. Defaults: port 9307, metadata /data/metadata, FlareSolverr http://flaresolverr:8191/v1 (blank disables it).
