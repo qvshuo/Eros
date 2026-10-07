@@ -4,6 +4,6 @@ uv.lock
 .ruff_cache/
 .pytest_cache/
 __pycache__/
-/compose.yml
+/docker-compose.yml
 /data/
 /dist/

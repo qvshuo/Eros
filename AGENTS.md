@@ -8,4 +8,4 @@
 - Sources: DMM, JavDB (API then web), JavBus, FC2, AVSOX; JavDB precedes JavBus. Keep full prefixes. Japanese actor names/rules use JSON; runtime settings use TOML and the webpage. Defaults: port 9307, metadata /data/metadata, FlareSolverr http://flaresolverr:8191/v1 (blank disables it).
 - One work/translation at a time. Send only titles/descriptions directly to the model with the user's exact prompt; no name placeholders or automatic script conversion. Actor fields never enter translation. No SQLite, source/translation cache, or automatic scrape tasks. Test translation only with non-sensitive text.
 - Keep UI, code and comments minimal and coherent; retain necessary validation, keyboard access and system theme. Backups/fixtures/checks stay outside the repository; preserve real metadata.
-- Ship only `compose.example.yml`; actual `compose.yml` and runtime data stay untracked. Deploy/restart Eros and Emby through their existing Compose services.
+- Ship only `docker-compose.example.yml`; actual `docker-compose.yml` and runtime data stay untracked. Deploy/restart Eros and Emby through their existing Compose services.
