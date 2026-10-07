@@ -7,17 +7,14 @@ using MediaBrowser.Controller.Providers;
 using MediaBrowser.Model.Configuration;
 using MediaBrowser.Model.IO;
 using MediaBrowser.Model.Logging;
-using MediaBrowser.Model.Serialization;
 
 namespace Eros.Emby;
 
 public sealed class MovieProvider : ILocalMetadataProvider<Movie>, IHasOrder
 {
-    private readonly MetadataLocator locator;
     private readonly ILogger logger;
-    public MovieProvider(IJsonSerializer serializer, ILogManager logManager)
+    public MovieProvider(ILogManager logManager)
     {
-        locator = new MetadataLocator(serializer);
         logger = logManager.GetLogger("Eros");
     }
     public string Name => "Eros";
@@ -29,7 +26,7 @@ public sealed class MovieProvider : ILocalMetadataProvider<Movie>, IHasOrder
         try
         {
             string? folder = !string.IsNullOrWhiteSpace(info.ContainingFolderPath) ? info.ContainingFolderPath : Path.GetDirectoryName(info.Path);
-            string? target = locator.Locate(Plugin.Instance?.Options.MetadataRoot ?? "", folder);
+            string? target = MetadataLocator.Locate(Plugin.Instance?.Options.MetadataRoot ?? "", folder);
             string? path = target == null ? null : Path.Combine(target, Path.GetFileNameWithoutExtension(info.Path) + ".nfo");
             if (path != null && MetadataLocator.IsRegularFile(path)) return Task.FromResult(NfoReader.Read(path, Path.GetFileName(target)));
         }

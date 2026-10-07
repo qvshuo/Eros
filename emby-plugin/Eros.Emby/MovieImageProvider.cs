@@ -10,18 +10,15 @@ using MediaBrowser.Model.Configuration;
 using MediaBrowser.Model.Entities;
 using MediaBrowser.Model.IO;
 using MediaBrowser.Model.Logging;
-using MediaBrowser.Model.Serialization;
 
 namespace Eros.Emby;
 
 public sealed class MovieImageProvider : ILocalImageFileProvider, IHasOrder
 {
-    private readonly MetadataLocator locator;
     private readonly IFileSystem fileSystem;
     private readonly ILogger logger;
-    public MovieImageProvider(IJsonSerializer serializer, IFileSystem fileSystem, ILogManager logManager)
+    public MovieImageProvider(IFileSystem fileSystem, ILogManager logManager)
     {
-        locator = new MetadataLocator(serializer);
         this.fileSystem = fileSystem;
         logger = logManager.GetLogger("Eros");
     }
@@ -37,7 +34,7 @@ public sealed class MovieImageProvider : ILocalImageFileProvider, IHasOrder
         try
         {
             string? folder = !string.IsNullOrWhiteSpace(item.ContainingFolderPath) ? item.ContainingFolderPath : Path.GetDirectoryName(item.Path);
-            string? target = locator.Locate(Plugin.Instance?.Options.MetadataRoot ?? "", folder);
+            string? target = MetadataLocator.Locate(Plugin.Instance?.Options.MetadataRoot ?? "", folder);
             if (target == null) return images;
             void Add(string path, ImageType type)
             {
@@ -55,7 +52,11 @@ public sealed class MovieImageProvider : ILocalImageFileProvider, IHasOrder
 
     public static IEnumerable<(string Path, ImageType Type)> Files(string target, string mediaPath)
     {
-        string prefix = Path.GetFileNameWithoutExtension(mediaPath) + "-";
+        string stem = Path.GetFileNameWithoutExtension(mediaPath);
+        string nfo = Path.Combine(target, stem + ".nfo");
+        if (!MetadataLocator.IsRegularFile(nfo)) return Enumerable.Empty<(string, ImageType)>();
+        NfoReader.Read(nfo, Path.GetFileName(target));
+        string prefix = stem + "-";
         var allowed = new[] { ".jpg", ".jpeg", ".png", ".gif", ".webp" };
         return Directory.EnumerateFiles(target)
             .Where(path => MetadataLocator.IsRegularFile(path) && allowed.Contains(Path.GetExtension(path).ToLowerInvariant()))

@@ -5,8 +5,6 @@ from pathlib import Path
 from pydantic import BaseModel
 
 from .config import Settings
-from .state import state_directory
-from .storage import write_json
 
 
 class DirectoryRequest(BaseModel):
@@ -60,9 +58,10 @@ class Directories:
         if (
             not request.name.strip()
             or request.name in (".", "..")
-            or any(c in request.name for c in "/\\\x00")
+            or Path(request.name).name != request.name
+            or any(ord(c) < 32 or 127 <= ord(c) <= 159 for c in request.name)
         ):
-            raise ValueError("enter a folder name without path separators")
+            raise ValueError("enter a folder name without path separators or control characters")
         parent = self.checked(request.parent, "metadata")
         path = self.checked(parent / request.name, "metadata")
         path.mkdir()
@@ -73,10 +72,3 @@ class Directories:
             self.checked(path, "media")
         if settings.metadata_root is not None:
             self.checked(settings.metadata_root, "metadata")
-
-    def activate(self, settings: Settings) -> None:
-        directory = (
-            str(settings.metadata_root.resolve().relative_to(self.data)) if settings.metadata_root else None
-        )
-        state = state_directory(settings.metadata_root).name if settings.metadata_root else None
-        write_json(Path("/data/state/output.json"), {"directory": directory, "state": state})

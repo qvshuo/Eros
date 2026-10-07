@@ -29,13 +29,10 @@ public static class NfoReader
         if (string.IsNullOrWhiteSpace(title)) throw new XmlException("Missing title");
         var movie = new Movie { Name = title, OriginalTitle = Text("originaltitle"), Overview = Text("plot") };
         var result = new MetadataResult<Movie> { Item = movie, HasMetadata = true };
-        string? number = root.Elements("uniqueid").FirstOrDefault(x => (string?)x.Attribute("type") == "Eros")?.Value.Trim();
-        if (expectedNumber != null)
-        {
-            var identifiers = root.Elements("uniqueid").Where(x => (string?)x.Attribute("type") == "Eros");
-            if (!identifiers.Any() || identifiers.Any(x => !string.Equals(x.Value.Trim(), expectedNumber, StringComparison.Ordinal)))
-                throw new XmlException("NFO number differs from directory");
-        }
+        var identifiers = root.Elements("uniqueid").Where(x => (string?)x.Attribute("type") == "Eros").Select(x => x.Value).ToArray();
+        string? number = identifiers.FirstOrDefault();
+        if (expectedNumber != null && (identifiers.Length == 0 || identifiers.Any(value => !string.Equals(value, expectedNumber, StringComparison.Ordinal))))
+            throw new XmlException("NFO number differs from directory");
         if (!string.IsNullOrWhiteSpace(number)) movie.SetProviderId("Eros", number);
         if (int.TryParse(Text("year"), out int year) && year > 0 && year <= 9999) movie.ProductionYear = year;
         if (DateTime.TryParseExact(Text("premiered"), "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out var date))

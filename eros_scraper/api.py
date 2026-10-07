@@ -80,10 +80,7 @@ def create_app(
         app.state.watcher = None
         if directories:
             directories.validate(settings)
-            directories.activate(settings)
         if settings.media_roots and settings.metadata_root:
-            if directories:
-                directories.validate(settings)
             app.state.runner = runner_factory(settings)
             app.state.watcher = asyncio.create_task(app.state.runner.watch())
         try:
@@ -192,11 +189,10 @@ def create_app(
                 else:
                     candidate = runner_factory(updated)
                     await candidate.scan_async()
-            old_config = path.read_bytes() if path.is_file() else None
             old_movies = service.state.movies_data if same_output else None
             scan_path = service.state.root / "scan.json" if same_output else None
             old_scan = scan_path.read_bytes() if scan_path and scan_path.is_file() else None
-            scan_saved = config_saved = False
+            scan_saved = False
             try:
                 if same_output:
                     from .scanner import Movie
@@ -204,15 +200,7 @@ def create_app(
                     service.state.save_scan([Movie.model_validate(row) for row in preview])
                     scan_saved = True
                 atomic_write(path, toml_text(updated.model_dump(mode="json")))
-                config_saved = True
-                if directories:
-                    directories.activate(updated)
             except OSError, ValueError:
-                if config_saved:
-                    if old_config is not None:
-                        atomic_write(path, old_config)
-                    else:
-                        path.unlink(missing_ok=True)
                 if scan_saved:
                     if old_scan is not None:
                         atomic_write(scan_path, old_scan)

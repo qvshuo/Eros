@@ -19,7 +19,7 @@ public sealed class PluginOptions : EditableOptionsBase
     [DisplayName("元数据目录")]
     [Description("Emby 进程可读取的绝对路径，例如 /metadata。")]
     [EditFolderPicker]
-    public string MetadataRoot { get; set; } = "";
+    public string MetadataRoot { get; set; } = "/metadata";
 
     protected override void Validate(ValidationContext context)
     {
