@@ -8,6 +8,21 @@ from datetime import UTC, datetime
 
 task_id = ContextVar("task_id", default=None)
 movie_key = ContextVar("movie_key", default=None)
+progress = ContextVar("progress", default=None)
+
+
+def report_progress(stage: str, status: str = "running", source=None, message: str | None = None) -> None:
+    callback = progress.get()
+    if callback:
+        callback(
+            {
+                "stage": stage,
+                "status": status,
+                "source": source,
+                "message": message,
+                "time": datetime.now(UTC).isoformat(),
+            }
+        )
 
 
 class JsonFormatter(logging.Formatter):

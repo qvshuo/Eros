@@ -4,10 +4,18 @@ from pathlib import Path
 from .actor_names import ActorNames, comparison_name
 from .engine import FIELDS, Scraper, title_key
 from .images import save_images
+from .logging_setup import report_progress
 from .models import Metadata, ScrapeRequest, Status
 from .scanner import Movie
 from .translation import Translator
-from .writer import existing_nfo, media_stems, nfo_bytes, read_nfo, target_folder, write_nfos
+from .writer import (
+    existing_nfo,
+    media_stems,
+    nfo_bytes,
+    read_nfo,
+    target_folder,
+    write_nfos,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -29,7 +37,9 @@ def normalize_actors(metadata: Metadata, names: ActorNames) -> list[dict]:
             )
             if candidates:
                 logger.warning(
-                    "演员名称存在歧义，保留来源名字：%s；候选日文主名：%s", actor.name, "、".join(candidates)
+                    "演员名称存在歧义，保留来源名字：%s；候选日文主名：%s",
+                    actor.name,
+                    "、".join(candidates),
                 )
             else:
                 logger.warning("演员名称未收录，保留来源名字：%s", actor.name)
@@ -53,6 +63,7 @@ async def scrape_movie(
     enrich=True,
     images=True,
     missing_only=False,
+    portraits=None,
 ):
     result = await scraper.scrape(
         ScrapeRequest(
@@ -99,6 +110,7 @@ async def scrape_movie(
     if not metadata.original_title:
         metadata.original_title = metadata.title
     report["actor_issues"] = normalize_actors(metadata, names)
+    report_progress("translation" if translator.settings.enabled else "metadata")
     report["translation_errors"] = await translator.metadata(metadata)
     if same_movie:
         # A translation outage must not replace a verified previous translation.
@@ -107,6 +119,7 @@ async def scrape_movie(
             if old_value:
                 setattr(metadata, error["field"], old_value)
     content = nfo_bytes(metadata)
+    report_progress("metadata")
     write_nfos(output, movie, content)
     report["images"] = (
         await save_images(
@@ -119,4 +132,6 @@ async def scrape_movie(
         if images
         else []
     )
+    if portraits is not None:
+        report["portraits"] = await portraits.save(metadata.actors)
     return report

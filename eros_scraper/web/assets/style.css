@@ -94,7 +94,7 @@ label input:not([type=checkbox]) { display: block; margin-top: 5px; }
 
 .section-heading p { margin: 0; color: var(--muted); font-size: 12px; }
 
-#panel-library>.scan-area,
+#movie-overview>.scan-area,
 #task-overview>.section-heading,
 #panel-actors>.section-heading { height: 38px; min-height: 38px; margin: 0 0 18px; display: flex; align-items: center; }
 
@@ -209,9 +209,9 @@ tbody tr.selected { background: var(--blue-bg); }
 
 .task-actions .button { font-size: 12px; height: 30px; min-height: 30px; padding: 4px 6px; }
 
-.task-detail-heading { margin: 18px 0; }
+.secondary-heading { margin: 18px 0; }
 
-.task-detail-heading h2 { font-size: 18px; }
+.secondary-heading h2 { font-size: 18px; }
 
 .task-results { padding: 0 18px; max-height: 65vh; overflow: auto; }
 
@@ -298,10 +298,6 @@ dialog p { color: var(--muted); margin: 12px 0 22px; white-space: pre-line; }
 
 .directory-entry:hover { background: var(--hover); }
 
-#movie-dialog { width: 520px; max-width: calc(100vw - 30px); }
-
-#movie-detail { max-height: 60vh; overflow: auto; margin-top: 18px; }
-
 .detail-path { overflow-wrap: anywhere; font-size: 12px; }
 
 .dropdown { display: inline-block; position: relative; max-width: 100%; }
@@ -379,10 +375,51 @@ label>.dropdown { display: block; width: 100%; margin-top: 5px; }
 
   .path-row .button { padding: 8px 9px; }
 
-  .task-detail-heading { align-items: flex-start; }
+  .secondary-heading { align-items: flex-start; }
 
   .dropdown-menu { max-width: calc(100vw - 16px); }
 }
 
 .checkbox-hit { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; margin: -4px 0; cursor: pointer; }
 .checkbox-hit:has(input:disabled) { cursor: not-allowed; }
+
+.secondary-back { margin-bottom: 18px; }
+.secondary-heading { margin-bottom: 20px; align-items: center; }
+.secondary-heading h2 { font-size: 20px; margin: 0 0 5px; }
+.movie-layout { display: grid; grid-template-columns: minmax(240px, 320px) minmax(0, 1fr); gap: 24px; align-items: start; }
+.movie-media, .movie-information { padding: 20px; }
+.movie-layout h3 { margin: 0; font-size: 14px; font-weight: 600; }
+.movie-information .form-grid { margin-top: 20px; }
+textarea { width: 100%; min-width: 0; display: block; margin-top: 5px; padding: 9px 10px; color: var(--text); background: var(--bg); border: 1px solid var(--border); border-radius: 5px; font: inherit; font-size: 13px; line-height: 1.6; resize: vertical; }
+textarea:focus { outline: 2px solid var(--border); outline-offset: 1px; }
+textarea:disabled { opacity: .6; }
+#movie-poster, #crop-preview { display: block; width: 100%; max-height: 540px; object-fit: contain; border-radius: 5px; margin-top: 16px; }
+#movie-poster[hidden], #crop-preview[hidden] { display: none; }
+.image-gallery { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; max-height: 250px; overflow: auto; margin-top: 16px; }
+.image-tile { padding: 0; border: 1px solid var(--border); border-radius: 4px; overflow: hidden; aspect-ratio: 1; background: var(--hover); }
+.image-tile img { width: 100%; height: 100%; object-fit: cover; }
+#crop-panel { margin-top: 20px; border-top: 1px solid var(--border); padding-top: 20px; }
+#crop-panel label { display: block; margin: 12px 0; }
+#crop-panel input[type=range] { width: 100%; padding: 0; height: 20px; accent-color: var(--text); }
+.crop-actions { display: flex; gap: 8px; margin-top: 12px; }
+.detail-files, .detail-diagnostics { border-top: 1px solid var(--border); padding-top: 20px; margin-top: 24px; }
+.detail-files p { margin: 8px 0; color: var(--muted); }
+.detail-diagnostics .result-row { border: 0; padding: 0; margin: 0; }
+#movies tr, .result-row { cursor: pointer; }
+#movies tr:hover { background: var(--hover); }
+@media(max-width:760px) {
+  .movie-layout { grid-template-columns: 1fr; gap: 16px; }
+  .movie-media, .movie-information { padding: 16px; }
+  #movie-poster, #crop-preview { max-height: 420px; }
+}
+
+#crop-original { display: block; width: 100%; height: auto; margin-top: 16px; border-radius: 5px; }
+
+.detail-process { margin-top: 24px; padding-top: 20px; border-top: 1px solid var(--border); }
+.process-list { list-style: none; margin: 12px 0 0; padding: 0; font-size: 12px; }
+.process-list li { display: grid; grid-template-columns: 65px minmax(0, 1fr) auto; gap: 12px; padding: 7px 0; border-bottom: 1px solid var(--border); }
+.process-list time { color: var(--muted); font-variant-numeric: tabular-nums; }
+
+.actor-portrait { width: 44px; height: 60px; object-fit: cover; border-radius: 4px; display: block; }
+
+#confirm-description { white-space: pre-wrap; max-height: 60vh; overflow: auto; overflow-wrap: anywhere; }

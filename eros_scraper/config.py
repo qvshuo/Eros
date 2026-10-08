@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import re
-import tomllib
 from pathlib import Path
+from typing import ClassVar
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -56,7 +56,7 @@ class SiteSettings(BaseModel):
 
 
 class ApiSettings(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", frozen=True)
     base_url: str = "https://jdforrepam.com"
     app_version: str = "1.9.28"
     app_version_number: str = "10928"
@@ -85,14 +85,23 @@ class Settings(BaseModel):
     retry_delay_seconds: int = Field(default=5, ge=1)
     retries: int = Field(default=1, ge=0, le=3)
     sites: dict[SourceId, SiteSettings] = Field(default_factory=dict)
-    javdb_api: ApiSettings = Field(default_factory=ApiSettings)
-    rules_file: Path | None = None
-    actor_names_file: Path | None = None
+    javdb_api: ClassVar[ApiSettings] = ApiSettings()
+    rules_file: Path | None = Field(default=None, exclude=True)
+    actor_names_file: Path | None = Field(default=None, exclude=True)
+    actor_images: bool = True
     media_roots: list[Path] = Field(default_factory=list)
     metadata_root: Path | None = Path("/data/metadata")
     watch_interval_seconds: int = Field(default=30, ge=5)
-    video_extensions: list[str] = Field(
-        default_factory=lambda: [".mp4", ".mkv", ".avi", ".mov", ".wmv", ".flv", ".m4v", ".ts", ".strm"]
+    video_extensions: ClassVar[tuple[str, ...]] = (
+        ".mp4",
+        ".mkv",
+        ".avi",
+        ".mov",
+        ".wmv",
+        ".flv",
+        ".m4v",
+        ".ts",
+        ".strm",
     )
     translation: TranslationSettings = Field(default_factory=TranslationSettings)
     item_retries: int = Field(default=1, ge=0, le=3)
@@ -106,11 +115,6 @@ class Settings(BaseModel):
     )
     _seconds = field_validator("timeout_seconds", "retry_delay_seconds", "watch_interval_seconds")(seconds)
 
-    @field_validator("rules_file", "actor_names_file", "metadata_root", mode="before")
-    @classmethod
-    def empty_optional(cls, value: object) -> object:
-        return None if isinstance(value, str) and not value.strip() else value
-
     @field_validator("flaresolverr_url")
     @classmethod
     def solver_address(cls, value: str | None) -> str | None:
@@ -120,13 +124,6 @@ class Settings(BaseModel):
         if not value.startswith(("http://", "https://")):
             raise ValueError("FlareSolverr requires an HTTP or HTTPS address")
         return value
-
-    @field_validator("video_extensions")
-    @classmethod
-    def validate_extensions(cls, value: list[str]) -> list[str]:
-        if not value or any(not re.fullmatch(r"\.[a-zA-Z0-9]{1,10}", item) for item in value):
-            raise ValueError("video_extensions requires suffixes such as .mp4 and .strm")
-        return sorted({item.lower() for item in value})
 
     @model_validator(mode="after")
     def validate_routes(self) -> Settings:
@@ -156,7 +153,4 @@ class Settings(BaseModel):
     def load(cls, path: Path | None = None) -> Settings:
         if path is None:
             return cls()
-        if path.suffix.lower() != ".toml":
-            raise ValueError("configuration must be TOML")
-        with path.open("rb") as stream:
-            return cls.model_validate(tomllib.load(stream))
+        return cls.model_validate_json(path.read_bytes())

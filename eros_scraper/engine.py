@@ -6,6 +6,7 @@ import unicodedata
 from typing import Any
 
 from .config import Settings
+from .logging_setup import report_progress
 from .models import (
     Category,
     Classification,
@@ -35,6 +36,7 @@ FIELDS = (
     "directors",
     "actors",
     "tags",
+    "genres",
     "artwork",
 )
 
@@ -102,7 +104,9 @@ class Scraper:
         results, fields, warnings = [], {}, []
         metadata: Metadata | None = None
         for source in route:
+            report_progress("source", source=source)
             result = await self._fetch(source, request)
+            report_progress("source", result.status.value, source)
             results.append(result)
             if result.status == Status.AMBIGUOUS and metadata is None:
                 return ScrapeResult(

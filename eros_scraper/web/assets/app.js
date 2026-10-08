@@ -9,6 +9,7 @@ const sourceNames = {
   fc2: 'FC2 官方',
   avsox: 'AVSOX'
 };
+const sourceLabel = source => sourceNames[source] || (source === 'gfriends' ? 'Gfriends' : source);
 const categoryNames = {
   censored: '有码',
   uncensored: '无码',
@@ -31,7 +32,8 @@ const taskNames = {
   scrape_missing: '补齐缺失',
   scrape_keys: '抓取作品',
   scrape_source: '指定来源抓取',
-  force_update: '重新抓取'
+  force_update: '重新抓取',
+  actor_images: '演员头像'
 };
 const statusOrder = {
   invalid_key: 0,
@@ -68,6 +70,17 @@ let siteDrafts = {},
   reloading = false,
   executing = false,
   currentTab = 'library';
+
+let moviePath = null,
+  movieData = null,
+  movieSnapshot = null,
+  movieRequest = 0,
+  movieReturn = '#library',
+  movieSaving = false,
+  cropBusy = false,
+  cropped = null,
+  cropTimer = null,
+  cropRequest = 0;
 
 function text(tag, value, className = '') {
   const node = document.createElement(tag);
@@ -152,6 +165,26 @@ async function action(fn) {
 
 function switchTab(tab, focus = false) {
   const path = tab.split('/');
+  const nextMovie = path[0] === 'library' && path[1] === 'movie' ? decodeURIComponent(path[2] || '') : null;
+  if (movieSaving && nextMovie !== moviePath) {
+    history.replaceState(null, '', '#library/movie/' + encodeURIComponent(moviePath));
+    notice('正在保存…');
+    return;
+  }
+  if (movieUnsaved() && nextMovie !== moviePath) {
+    if ($('confirm-dialog').open) return;
+    void action(async () => {
+      if (await confirmAction('离开作品详情', '未保存的修改将丢失。')) {
+        movieSnapshot = movieFingerprint();
+        switchTab(tab, focus);
+      } else history.replaceState(null, '', '#library/movie/' + encodeURIComponent(moviePath));
+    });
+    return;
+  }
+  const changedMovie = nextMovie !== moviePath;
+  moviePath = nextMovie;
+  $('movie-overview').hidden = Boolean(moviePath);
+  $('movie-page').hidden = !moviePath;
   tab = path[0];
   if (tab === 'tasks') {
     const id = path[1] || null;
@@ -175,10 +208,13 @@ function switchTab(tab, focus = false) {
     button.tabIndex = on ? 0 : -1;
     $('panel-' + button.dataset.tab).hidden = !on;
   }
-  const hash = '#' + tab + (tab === 'tasks' && detailId ? '/' + detailId : '');
+  const hash = '#' + tab + (tab === 'tasks' && detailId ? '/' + detailId : moviePath ? '/movie/' +
+    encodeURIComponent(moviePath) : '');
   if (location.hash !== hash) history.replaceState(null, '', hash);
   if (focus) $('tab-' + tab).focus();
   if (tab === 'tasks' && detailId) void action(loadTaskDetail);
+  if (tab === 'actors') void action(reload);
+  if (moviePath && changedMovie) void action(loadMovieDetail);
 }
 for (const button of document.querySelectorAll('[data-tab]')) {
   button.onclick = () => switchTab(button.dataset.tab);
@@ -309,6 +345,10 @@ function renderMovies() {
     key.append(link);
     const status = document.createElement('td');
     status.append(badge(movie.status));
+    row.onclick = event => {
+      if (!event.target.closest('button,a,input,label') && !window.getSelection()?.toString())
+        showMovieDetail(movie);
+    };
     row.append(cell, key, text('td', categoryNames[movie.category] || '未知', 'category-cell'), status);
     $('movies').append(row);
   }
@@ -376,6 +416,7 @@ async function confirmAction(title, description) {
   const dialog = $('confirm-dialog');
   $('confirm-title').textContent = title;
   $('confirm-description').textContent = description;
+  dialog.querySelector('button[value="confirm"]').textContent = title === '修改预览' ? '保存' : '确认';
   dialog.returnValue = 'cancel';
   return new Promise(resolve => {
     dialog.addEventListener('close', () => resolve(dialog.returnValue === 'confirm'), {
@@ -454,7 +495,67 @@ function chooseCandidate(item, source, candidate) {
   notice('候选已填入。');
 }
 
-function renderResults(container, record) {
+const stageNames = {
+  source: '数据源',
+  challenge: '过墙',
+  translation: '翻译',
+  metadata: '保存信息',
+  images: '下载图片',
+  portraits: '演员头像',
+  crop: '裁剪封面',
+  retry: '重试',
+  finished: '完成'
+};
+const sourceStatusNames = {
+  found: '已获取',
+  not_found: '未找到',
+  ambiguous: '待选择',
+  login_required: '需要登录',
+  region_blocked: '地区限制',
+  ip_blocked: '访问受限',
+  blocked: '访问受限',
+  network_error: '网络错误',
+  parse_error: '解析失败',
+  identity_mismatch: '番号不符',
+  unsupported: '不支持',
+  success: '已完成',
+  failed: '失败'
+};
+
+function processList(events, running = false) {
+  const list = document.createElement('ol');
+  list.className = 'process-list';
+  for (const event of events || []) {
+    const row = document.createElement('li');
+    const time = new Date(event.time).toLocaleTimeString('zh-CN', {
+      hour12: false
+    });
+    const name = event.source ?
+      `${sourceLabel(event.source)}${event.message ? ' · '+event.message : ''}` : stageNames[
+        event.stage] || event.stage;
+    row.append(text('time', time), text('span', name), text('span', event.status === 'running' ? running &&
+      event === events.at(-1) ? '进行中' : '已执行' : sourceStatusNames[event.status] || event.status, 'muted'));
+    list.append(row);
+  }
+  return list;
+}
+
+function renderMovieProcess(history) {
+  $('movie-process').replaceChildren();
+  const current = history?.[0];
+  if (!current) return;
+  const heading = document.createElement('div');
+  heading.className = 'section-heading';
+  const link = text('a', '抓取过程', 'key-link');
+  link.href = '#tasks/' + current.task_id;
+  const stage = current.stage;
+  heading.append(link, text('span', current.status === 'running' ? (stage?.source ? sourceLabel(stage
+      .source) : stageNames[stage?.stage]) || '进行中' : current.status === 'pending' ? '等待中' :
+    sourceStatusNames[current.status] || '已结束', 'muted'));
+  $('movie-process').append(heading, processList(current.events, current.status === 'running'));
+}
+
+function renderResults(container, record, showHeading = true) {
   container.replaceChildren();
   if (record.error) container.append(text('p', record.error, 'error'));
   const items = [...(record.items || [])].sort((a, b) => (a.status === 'failed' ? 0 : 1) - (b.status ===
@@ -464,12 +565,24 @@ function renderResults(container, record) {
     box.className = 'result-row' + (item.status === 'failed' ? ' error' : '');
     const heading = document.createElement('div');
     heading.className = 'result-heading';
-    heading.append(text('strong', item.key), badge(item.status));
-    box.append(heading);
+    const movieLink = text('button', item.key, 'key-link');
+    movieLink.onclick = () => openMovieKey(item.key);
+    heading.append(movieLink, badge(item.status));
+    box.onclick = event => {
+      if (!event.target.closest('button,a,input') && !window.getSelection()?.toString()) openMovieKey(item
+        .key);
+    };
+    if (showHeading) box.append(heading);
+    if (item.stage && item.status === 'running') box.append(text('p', item.stage.source ? sourceLabel(item
+      .stage.source) : stageNames[item.stage.stage], 'muted'));
+    if (item.events?.length) box.append(processList(item.events, item.status === 'running'));
     const result = item.result || {},
       notices = [result.error, ...(result.warnings || []), ...(result.translation_errors || []).map(e =>
-        '翻译：' + e.error), ...(result.actor_issues || []).map(e => '演员名称待确认：' + e.name), ...(result.images ||
-        []).filter(e => e.status === 'error').map(e => '图片：' + e.message)].filter(Boolean);
+          '翻译：' + e.error), ...(result.actor_issues || []).map(e => '演员名称待确认：' + e.name), ...(result.images ||
+          []).filter(e => e.status === 'error').map(e => '图片：' + (e.message || e.error)),
+        ...(result.portraits || []).filter(e => e.status === 'error').map(e => '演员头像：' + e.name + ' · ' + e
+          .error)
+      ].filter(Boolean);
     for (const line of notices) box.append(text('p', line));
     for (const source of result.sources || []) {
       if (source.status !== 'found') box.append(text('p',
@@ -576,6 +689,8 @@ function renderTasks() {
     const process = document.createElement('td');
     process.className = 'task-process';
     process.append(text('span', `${task.progress} / ${task.total}`), text('small',
+      task.status === 'running' && task.current ?
+      `${task.current.key} · ${task.current.source ? sourceLabel(task.current.source) : stageNames[task.current.stage] || '进行中'}` :
       `成功 ${task.success} · 失败 ${task.failed}`, 'muted'));
     const status = document.createElement('td');
     status.append(taskBadge(task));
@@ -630,7 +745,9 @@ async function loadTaskDetail() {
     } else throw error;
   }
 }
-$('task-back').onclick = () => switchTab('tasks');
+$('task-back').onclick = () => {
+  location.hash = 'tasks';
+};
 
 function changeResultPage(page) {
   resultPage = page;
@@ -659,21 +776,54 @@ $('task-next').onclick = () => {
 
 function renderActors() {
   const query = $('actor-search').value.trim().toLowerCase(),
-    filter = $('actor-filter').value;
-  const rows = actors.filter(issue => (filter === 'all' || (issue.candidates?.length ? 'ambiguous' :
-    'unknown') === filter) && (!query || [issue.name, ...(issue.candidates || [])].join(' ').toLowerCase()
+    filter = $('actor-filter').value,
+    portraitFilter = $('actor-portrait-filter').value;
+  const rows = actors.filter(issue => (filter === 'all' || issue.status === filter) && (portraitFilter ===
+    'all' || issue.portrait_status === portraitFilter) && (!query || [issue.name,
+      ...(issue.candidates || [])
+    ].join(' ').toLowerCase()
     .includes(query)));
   const pages = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
   actorPage = Math.min(actorPage, pages);
   $('actors').replaceChildren();
-  $('actors-summary').textContent = `${actors.length} 个待确认名称`;
+  $('actors-summary').textContent = `${actors.length} 位演员`;
+  $('actor-fill').disabled = busy() || !actors.some(actor => actor.keys?.length);
   for (const issue of rows.slice((actorPage - 1) * PAGE_SIZE, actorPage * PAGE_SIZE)) {
     const row = document.createElement('tr'),
       name = text('td', issue.name, 'actor-name');
     const status = document.createElement('td');
-    status.append(text('span', issue.candidates?.length ? '共享名称' : '未收录', 'badge warn'));
-    row.append(name, status, text('td', (issue.candidates || []).join('、') || '—', 'actor-candidates'), text(
-      'td', issue.count ?? 1));
+    const labels = {
+      known: '已收录',
+      ambiguous: '共享名称',
+      unknown: '未收录'
+    };
+    status.append(text('span', labels[issue.status] || '未收录', 'badge ' + (issue.status === 'known' ? '' :
+      'warn')));
+    const avatar = document.createElement('td');
+    if (issue.portrait) {
+      const image = document.createElement('img');
+      image.src = '/api/actors/' + encodeURIComponent(issue.name) + '/portrait';
+      image.alt = issue.name;
+      image.loading = 'lazy';
+      image.className = 'actor-portrait';
+      avatar.append(image);
+    } else avatar.append(text('span', '缺少头像', 'muted'));
+    const operation = document.createElement('td'),
+      button = text('button', issue.portrait ? '更新头像' : '获取头像', 'button quiet');
+    button.disabled = busy() || !issue.keys?.length || issue.status === 'ambiguous';
+    button.onclick = () => action(async () => {
+      await api('tasks', 'POST', {
+        type: 'actor_images',
+        keys: issue.keys,
+        actor_names: [issue.name],
+        replace_avatars: issue.portrait
+      });
+      await reload();
+    });
+    operation.append(button);
+    row.append(avatar, name, status, text('td', (issue.candidates || []).join('、') || '—',
+      'actor-candidates'), text(
+      'td', issue.count ?? 1), operation);
     $('actors').append(row);
   }
   $('actor-empty').hidden = rows.length !== 0;
@@ -681,7 +831,17 @@ function renderActors() {
   $('actor-prev').disabled = actorPage === 1;
   $('actor-next').disabled = actorPage === pages;
 }
-for (const id of ['actor-search', 'actor-filter']) $(id).addEventListener(id === 'actor-search' ? 'input' :
+$('actor-fill').onclick = () => action(async () => {
+  const keys = [...new Set(actors.filter(actor => actor.status !== 'ambiguous').flatMap(actor => actor
+    .keys || []))];
+  await api('tasks', 'POST', {
+    type: 'actor_images',
+    keys
+  });
+  await reload();
+});
+for (const id of ['actor-search', 'actor-filter', 'actor-portrait-filter']) $(id).addEventListener(id ===
+  'actor-search' ? 'input' :
   'change', () => {
     actorPage = 1;
     renderActors();
@@ -720,8 +880,9 @@ async function reload() {
   if (reloading) return;
   reloading = true;
   try {
-    const [nextMovies, nextTasks, nextActors] = await Promise.all([api('movies'), api('tasks'), api(
-      'unknown-actors')]);
+    const [nextMovies, nextTasks, nextActors] = await Promise.all([api('movies'), api('tasks'),
+      currentTab === 'actors' ? api('actors/library') : Promise.resolve(actors)
+    ]);
     const changedMovies = JSON.stringify(movies) !== JSON.stringify(nextMovies),
       changedTasks = JSON.stringify(tasks) !== JSON.stringify(nextTasks),
       changedActors = JSON.stringify(actors) !== JSON.stringify(nextActors);
@@ -740,10 +901,21 @@ async function reload() {
       renderTasks();
       if (detailId) void action(loadTaskDetail);
     }
-    if (changedActors) renderActors();
+    if (changedActors || changedTasks) renderActors();
     updateActions();
     updateSettingsState();
     $('scan').disabled = busy();
+    updateMovieState();
+    if (moviePath && movieData && (busy() || movieData.history?.some(item => ['pending', 'running']
+        .includes(item.status)))) {
+      const path = moviePath;
+      const detail = await api('movies/detail?path=' + encodeURIComponent(path));
+      if (path === moviePath) {
+        movieData.history = detail.history;
+        renderMovieProcess(detail.history);
+        $('movie-detail-status').replaceChildren(badge(detail.status));
+      }
+    }
   } finally {
     reloading = false;
   }
@@ -851,6 +1023,7 @@ function applyConfig(value) {
   config = value;
   siteDrafts = {};
   $('translation').checked = value.translation.enabled;
+  $('actor-images').checked = value.actor_images;
   $('endpoint').value = value.translation.endpoint;
   $('model').value = value.translation.model;
   showSecret('api-key', value.translation.api_key);
@@ -880,6 +1053,7 @@ function settingsValue() {
     media_roots: [...document.querySelectorAll('.media-path')].map(input => input.value.trim()).filter(
       Boolean),
     metadata_root: $('metadata-root').value.trim() || null,
+    actor_images: $('actor-images').checked,
     flaresolverr_url: $('solver-url').value.trim(),
     sites: siteDrafts,
     routes: {},
@@ -1024,42 +1198,335 @@ $('create-folder').onclick = async () => {
     $('directory-error').hidden = false;
   }
 };
-async function showMovieDetail(movie) {
-  $('movie-detail-title').textContent = movie.key;
-  $('movie-detail').replaceChildren(text('p', '正在读取…', 'muted'));
-  $('movie-dialog').showModal();
-  const detail = await api('movies/detail?path=' + encodeURIComponent(movie.path));
-  $('movie-detail').replaceChildren(badge(detail.status), text('p', detail.path, 'detail-path'));
-  for (const warning of detail.warnings || []) $('movie-detail').append(text('p', warning, 'error'));
-  for (const file of detail.media_files) $('movie-detail').append(text('p', file.split('/').pop()));
-  const result = detail.last_result;
-  if (result?.error) $('movie-detail').append(text('p', result.error, 'error'));
-  for (const source of result?.sources || []) {
-    if (source.status !== 'found') $('movie-detail').append(text('p',
-      `${sourceNames[source.source]||source.source}：${source.message||source.status}`, 'error'));
-    for (const candidate of source.candidates || []) {
-      const line = document.createElement('div');
-      line.className = 'candidate';
-      line.append(text('p', `${candidate.number} · ${candidate.title||''}`));
-      if (valid(movie)) {
-        const button = text('button', '选择', 'button');
-        button.onclick = () => {
-          $('movie-dialog').close();
-          chooseCandidate({
-            key: movie.key
-          }, source, candidate);
-        };
-        line.append(button);
+
+function showMovieDetail(movie) {
+  if (movie.path === moviePath) return;
+  movieReturn = location.hash || '#library';
+  location.hash = 'library/movie/' + encodeURIComponent(movie.path);
+}
+
+function openMovieKey(key) {
+  const movie = movies.find(item => item.key === key);
+  if (movie) showMovieDetail(movie);
+  else notice('作品已不在媒体库中。', true);
+}
+
+function movieFingerprint() {
+  return JSON.stringify([...$('movie-fields').querySelectorAll('input,textarea')].map(input => input.value));
+}
+
+function movieUnsaved() {
+  return Boolean(moviePath && movieSnapshot !== null && movieFingerprint() !== movieSnapshot);
+}
+
+function updateMovieState() {
+  $('movie-back').disabled = movieSaving;
+  $('movie-save').disabled = !movieData?.editable || busy() || movieSaving || cropBusy || !movieUnsaved();
+  $('crop-open').disabled = !movieData?.editable || !movieData?.artwork.length || busy() || movieSaving || cropBusy;
+  $('crop-save').disabled = !cropped || cropBusy || movieSaving || busy();
+  for (const input of $('movie-fields').querySelectorAll('input,textarea'))
+    input.disabled = !movieData?.editable || movieSaving || busy();
+  for (const id of ['crop-source', 'crop-detect', 'crop-center', 'crop-x', 'crop-y'])
+    $(id).disabled = cropBusy || movieSaving || busy();
+  $('crop-close').disabled = movieSaving;
+}
+const movieFields = [
+  ['title', '标题', 'textarea'],
+  ['original_title', '原标题', 'textarea'],
+  ['plot', '介绍', 'textarea'],
+  ['release_date', '发行日期', 'date'],
+  ['runtime_minutes', '时长（分钟）', 'number'],
+  ['studio', '片商', 'text'],
+  ['publisher', '发行商', 'text'],
+  ['label', '厂牌', 'text'],
+  ['series', '系列', 'text'],
+  ['directors', '导演', 'list'],
+  ['actors', '演员', 'list'],
+  ['genres', '类型', 'list'],
+  ['tags', '标签', 'list']
+];
+
+function artworkURL(file) {
+  return '/api/movies/' + encodeURIComponent(movieData.key) + '/artwork?file=' + encodeURIComponent(file) +
+    '&v=' + Date.now();
+}
+
+function renderMovieDetail(detail) {
+  movieData = detail;
+  cropRequest++;
+  cropBusy = false;
+  cropped = null;
+  $('movie-detail-title').textContent = detail.key;
+  $('movie-detail-summary').textContent =
+    `${categoryNames[detail.category] || '未知'} · ${detail.media_files.length} 个媒体文件`;
+  $('movie-detail-status').replaceChildren(badge(detail.status));
+  $('movie-loading').hidden = true;
+  $('movie-content').hidden = false;
+  $('crop-panel').hidden = true;
+  const metadata = detail.metadata || {};
+  $('movie-fields').replaceChildren();
+  for (const [field, name, type] of movieFields) {
+    const label = document.createElement('label');
+    label.append(document.createTextNode(name));
+    const input = document.createElement(['textarea', 'list'].includes(type) ? 'textarea' : 'input');
+    input.id = 'edit-' + field;
+    if (input.tagName === 'INPUT') input.type = type;
+    else input.rows = field === 'plot' ? 7 : type === 'list' ? 3 : 2;
+    if (type === 'number') {
+      input.min = 0;
+      input.step = 1;
+    }
+    const value = metadata[field];
+    input.value = type === 'list' ? (value || []).map(item => typeof item === 'string' ? item : item.name)
+      .join('\n') : value ?? (field === 'title' ? detail.key : '');
+    input.disabled = !detail.editable;
+    input.required = field === 'title';
+    label.className = ['title', 'original_title', 'plot'].includes(field) ? 'span-full' : '';
+    label.append(input);
+    $('movie-fields').append(label);
+  }
+  const poster = detail.artwork.find(file => /-poster\.(jpg|jpeg|png|webp|gif)$/i.test(file));
+  $('movie-poster').hidden = !poster;
+  $('poster-empty').hidden = Boolean(poster);
+  if (poster) $('movie-poster').src = artworkURL(poster);
+  else $('movie-poster').removeAttribute('src');
+  $('movie-gallery').replaceChildren();
+  for (const file of detail.artwork) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'image-tile';
+    button.title = file;
+    const image = document.createElement('img');
+    image.src = artworkURL(file);
+    image.alt = file;
+    image.loading = 'lazy';
+    button.append(image);
+    button.onclick = () => openCrop(file);
+    $('movie-gallery').append(button);
+  }
+  $('movie-files').replaceChildren(text('h3', '文件'), text('p', detail.path, 'detail-path'));
+  for (const file of detail.media_files) $('movie-files').append(text('p', file.split('/').pop(),
+    'detail-path'));
+  $('movie-diagnostics').replaceChildren();
+  renderResults($('movie-diagnostics'), {
+    items: [{
+      key: detail.key,
+      status: detail.status,
+      result: {
+        ...detail.last_result,
+        warnings: detail.warnings
       }
-      $('movie-detail').append(line);
+    }]
+  }, false);
+  if (detail.metadata_error) $('movie-diagnostics').append(text('p', detail.metadata_error, 'error'));
+  renderMovieProcess(detail.history);
+  movieSnapshot = movieFingerprint();
+  updateMovieState();
+}
+async function loadMovieDetail() {
+  const path = moviePath,
+    request = ++movieRequest;
+  movieSnapshot = null;
+  movieData = null;
+  $('movie-detail-title').textContent = movies.find(movie => movie.path === path)?.key || '作品详情';
+  $('movie-detail-summary').textContent = '';
+  $('movie-detail-status').replaceChildren();
+  $('movie-loading').hidden = false;
+  $('movie-loading').textContent = '正在读取…';
+  $('movie-content').hidden = true;
+  try {
+    const detail = await api('movies/detail?path=' + encodeURIComponent(path));
+    if (path !== moviePath || request !== movieRequest) return;
+    renderMovieDetail(detail);
+  } catch (error) {
+    if (path !== moviePath || request !== movieRequest) return;
+    $('movie-loading').textContent = error.message;
+  }
+}
+$('movie-back').onclick = () => {
+  location.hash = movieReturn.slice(1);
+};
+$('movie-form').addEventListener('input', updateMovieState);
+$('movie-form').onsubmit = event => {
+  event.preventDefault();
+  void action(async () => {
+    if ($('movie-save').disabled) return;
+    const data = {},
+      path = moviePath,
+      key = movieData.key;
+    for (const [field, , type] of movieFields) {
+      const value = $('edit-' + field).value;
+      data[field] = type === 'list' ? [...new Set(value.split('\n').map(s => s.trim()).filter(
+          Boolean))] :
+        type === 'number' ? value === '' ? null : Number(value) : value.trim() || null;
+      if (field === 'actors') data[field] = data[field].map(name => movieData.metadata?.actors.find(
+        actor => actor.name === name) || {
+        name
+      });
+    }
+    const oldValues = JSON.parse(movieSnapshot),
+      fields = [...$('movie-fields').querySelectorAll('input,textarea')];
+    for (const [index, [field]] of movieFields.entries())
+      if (oldValues[index] === fields[index].value) delete data[field];
+    const preview = movieFields.flatMap(([field, name], index) => oldValues[index] !== fields[index]
+        .value ? [`${name}\n原：${oldValues[index] || '—'}\n新：${fields[index].value || '—'}`] : [])
+      .join('\n\n');
+    if (!await confirmAction('修改预览', preview)) return;
+    if (path !== moviePath || busy() || movieSaving || cropBusy) return;
+    movieSaving = true;
+    updateMovieState();
+    try {
+      const detail = await api('movies/' + encodeURIComponent(key) + '/metadata', 'PUT', data);
+      if (moviePath === path) renderMovieDetail(detail);
+      notice(detail.last_result?.translation_errors?.length ? '信息已保存，翻译未完成。' : '已保存。', Boolean(detail
+        .last_result?.translation_errors?.length));
+      await reload();
+    } finally {
+      movieSaving = false;
+      updateMovieState();
+    }
+  });
+};
+
+function openCrop(file) {
+  if (!movieData?.editable || busy() || movieSaving || cropBusy) return;
+  $('crop-source').replaceChildren(...movieData.artwork.map(name => {
+    const option = text('option', name);
+    option.value = name;
+    return option;
+  }));
+  $('crop-source').value = file || movieData.artwork.find(name => /-fanart\./i.test(name)) || movieData
+    .artwork[0];
+  cropped = null;
+  $('crop-panel').hidden = false;
+  initDropdowns();
+  void action(() => previewCrop(false));
+}
+
+function drawCropOriginal(file, box) {
+  const image = new Image(),
+    path = moviePath,
+    ticket = cropRequest;
+  image.onload = () => {
+    if (path !== moviePath || ticket !== cropRequest || file !== $('crop-source').value) return;
+    const canvas = $('crop-original'),
+      context = canvas.getContext('2d');
+    const scale = Math.min(1, 640 / image.naturalWidth);
+    canvas.width = Math.round(image.naturalWidth * scale);
+    canvas.height = Math.round(image.naturalHeight * scale);
+    context.drawImage(image, 0, 0, canvas.width, canvas.height);
+    context.fillStyle = 'rgba(0,0,0,.45)';
+    context.fillRect(0, 0, canvas.width, canvas.height);
+    const [x, y, w, h] = box;
+    context.drawImage(image, x, y, w, h, x * scale, y * scale, w * scale, h * scale);
+    context.strokeStyle = '#fff';
+    context.lineWidth = 2;
+    context.strokeRect(x * scale, y * scale, w * scale, h * scale);
+  };
+  image.src = artworkURL(file);
+}
+async function previewCrop(center = false, manual = false) {
+  const path = moviePath,
+    file = $('crop-source').value,
+    ticket = ++cropRequest;
+  if (!movieData || movieSaving) return;
+  cropBusy = true;
+  updateMovieState();
+  $('crop-status').textContent = '正在裁剪…';
+  try {
+    const request = {
+      file,
+      center
+    };
+    if (manual && cropped) {
+      request.box = [...cropped.box];
+      request.box[0] = Number($('crop-x').value);
+      request.box[1] = Number($('crop-y').value);
+      request.fingerprint = cropped.fingerprint;
+    }
+    const result = await api('movies/' + encodeURIComponent(movieData.key) + '/crop', 'POST', request);
+    if (path !== moviePath || ticket !== cropRequest || file !== $('crop-source').value) return;
+    cropped = {
+      ...result,
+      file
+    };
+    drawCropOriginal(file, result.box);
+    $('crop-preview').src = result.preview;
+    $('crop-preview').hidden = false;
+    $('crop-x').max = result.width - result.box[2];
+    $('crop-x').value = result.box[0];
+    $('crop-y').max = result.height - result.box[3];
+    $('crop-y').value = result.box[1];
+    $('crop-status').textContent = manual ? '已调整 · 2:3' : result.faces.length ?
+      `检测到 ${result.faces.length} 张人脸 · 2:3` : '居中裁剪 · 2:3';
+  } catch (error) {
+    if (ticket === cropRequest && path === moviePath) {
+      cropped = null;
+      $('crop-preview').hidden = true;
+      $('crop-status').textContent = error.message;
+    }
+  } finally {
+    if (ticket === cropRequest) {
+      cropBusy = false;
+      updateMovieState();
     }
   }
-  for (const error of result?.translation_errors || []) $('movie-detail').append(text('p', error.error,
-    'error'));
-  for (const image of result?.images || [])
-    if (image.status === 'error') $('movie-detail').append(text('p', image.message, 'error'));
 }
-$('movie-detail-close').onclick = () => $('movie-dialog').close();
+$('crop-open').onclick = () => openCrop();
+$('crop-close').onclick = () => {
+  if (movieSaving) return;
+  cropRequest++;
+  clearTimeout(cropTimer);
+  cropBusy = false;
+  $('crop-panel').hidden = true;
+  cropped = null;
+  updateMovieState();
+};
+$('crop-source').onchange = () => {
+  cropped = null;
+  void action(() => previewCrop(false));
+};
+$('crop-detect').onclick = () => void action(() => previewCrop(false));
+$('crop-center').onclick = () => void action(() => previewCrop(true));
+for (const id of ['crop-x', 'crop-y']) $(id).oninput = () => {
+  clearTimeout(cropTimer);
+  $('crop-save').disabled = true;
+  cropTimer = setTimeout(() => void action(() => previewCrop(false, true)), 200);
+};
+$('crop-save').onclick = () => void action(async () => {
+  if (!cropped || cropBusy || movieSaving || busy()) return;
+  const path = moviePath,
+    result = cropped;
+  movieSaving = true;
+  updateMovieState();
+  try {
+    const detail = await api('movies/' + encodeURIComponent(movieData.key) + '/crop', 'PUT', {
+      file: result.file,
+      box: result.box,
+      fingerprint: result.fingerprint
+    });
+    if (moviePath === path) {
+      if (movieUnsaved()) {
+        movieData.artwork = detail.artwork;
+        $('movie-poster').src = artworkURL(detail.artwork.find(file => /-poster\./i.test(file)));
+        $('movie-poster').hidden = false;
+        $('poster-empty').hidden = true;
+      } else renderMovieDetail(detail);
+      $('crop-panel').hidden = true;
+      cropped = null;
+    }
+    notice('封面已保存。');
+  } finally {
+    movieSaving = false;
+    updateMovieState();
+  }
+});
+window.addEventListener('beforeunload', event => {
+  if (movieSaving || movieUnsaved()) {
+    event.preventDefault();
+    event.returnValue = '';
+  }
+});
 void action(async () => {
   applyConfig(await api('config'));
   if (!config.configured) switchTab('settings');

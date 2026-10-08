@@ -1,6 +1,7 @@
 import asyncio
 import fcntl
 import logging
+import sqlite3
 import uuid
 from typing import Literal
 
@@ -9,15 +10,15 @@ from pydantic import BaseModel, ConfigDict, Field
 from .actor_names import ActorNames
 from .config import Settings
 from .engine import Scraper
+from .images import Gfriends
 from .library import normalize_actors, scrape_movie
-from .logging_setup import cleanup, configure, movie_key
+from .logging_setup import cleanup, configure, movie_key, progress, report_progress
 from .logging_setup import task_id as log_task_id
 from .models import Category, SourceId
 from .numbers import NumberRules
 from .scanner import scan, validate_roots
 from .sources import source_for_url
 from .state import State, now, state_directory
-from .storage import write_json
 from .translation import Translator
 from .writer import existing_nfo, nfo_bytes, nfo_paths, read_nfo, write_nfos
 
@@ -26,13 +27,22 @@ logger = logging.getLogger(__name__)
 
 class TaskRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    type: Literal["scrape_full", "scrape_missing", "scrape_keys", "scrape_source", "force_update"]
+    type: Literal[
+        "scrape_full",
+        "scrape_missing",
+        "scrape_keys",
+        "scrape_source",
+        "force_update",
+        "actor_images",
+    ]
     keys: list[str] = Field(default_factory=list)
     source_id: SourceId | None = None
     external_id: str | None = None
     source_url: str | None = None
     enrich: bool = True
     images: bool = True
+    replace_avatars: bool = False
+    actor_names: list[str] = Field(default_factory=list)
 
 
 class TaskRunner:
@@ -49,11 +59,14 @@ class TaskRunner:
         if internal.is_symlink():
             raise ValueError("state directory must not be a symlink")
         internal.mkdir(parents=True, exist_ok=True)
-        self.process_lock = (internal / "service.lock").open("a")
+        lock = internal / "service.lock"
+        if lock.is_symlink():
+            raise ValueError("service lock must not be a symlink")
+        self.process_lock = lock.open("a")
         try:
             fcntl.flock(self.process_lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
             self.state = State(self.output)
-        except OSError, ValueError:
+        except OSError, ValueError, sqlite3.Error:
             self.process_lock.close()
             raise ValueError("state files are unreadable or another Eros writer is active") from None
         configure()
@@ -80,9 +93,11 @@ class TaskRunner:
                     results.get(movie.key, {}).get("category", rules.classify(movie.key).category)
                 )
                 result = results.get(movie.key, {})
-                failed = result.get("status") not in (None, "found", "unchanged") or any(
-                    image.get("status") == "error" for image in result.get("images", [])
-                )
+                failed = result.get("status") not in (
+                    None,
+                    "found",
+                    "unchanged",
+                ) or any(image.get("status") == "error" for image in result.get("images", []))
                 path = existing_nfo(self.output, movie)
                 if failed:
                     movie.status = "failed"
@@ -204,24 +219,40 @@ class TaskRunner:
             names = ActorNames.load(self.settings.actor_names_file)
             pending = names.pending(self.state.issues)
             if pending != self.state.issues:
-                write_json(self.state.root / "actors-unknown.json", pending)
-                self.state.issues = pending
-            async with self.scraper_factory(self.settings) as scraper:
+                self.state.save_issues(pending)
+            async with (
+                self.scraper_factory(self.settings) as scraper,
+                Gfriends(self.settings, names, self.output) as portraits,
+            ):
 
                 async def one(item):
                     movie_key.set(item["key"])
+
+                    def update_progress(event):
+                        previous = item.get("stage")
+                        if previous and all(
+                            previous.get(key) == event.get(key)
+                            for key in ("stage", "status", "source", "message")
+                        ):
+                            return
+                        item["events"] = [*item.get("events", []), event][-60:]
+                        item["stage"] = event
+                        task["current"] = {"key": item["key"], **event}
+                        self.state.save_task(task, item)
+
+                    token = progress.set(update_progress)
                     report = {}
                     success = False
                     for attempt in range(self.settings.item_retries + 1):
                         item.update(status="running", attempts=item["attempts"] + 1)
                         for row in self.state.movies_data:
-                            if row["key"] == item["key"]:
+                            if row["key"] == item["key"] and request.type != "actor_images":
                                 row["status"] = "running"
-                        write_json(self.state.root / "scan.json", self.state.movies_data)
-                        self.state.save_task(task)
+                        self.state.save_catalog(self.state.movies_data)
+                        self.state.save_task(task, item)
                         try:
                             movie = self.state.movie(item["key"])
-                            report = await self.process(scraper, movie, names, request)
+                            report = await self.process(scraper, movie, names, request, portraits)
                             success = (
                                 report["status"] in ("found", "unchanged")
                                 and not report.get("translation_errors")
@@ -229,18 +260,26 @@ class TaskRunner:
                             )
                         except Exception as exc:
                             logger.exception("处理 %s 失败", item["key"])
-                            report = {"key": item["key"], "status": "error", "error": str(exc)}
+                            report = {
+                                "key": item["key"],
+                                "status": "error",
+                                "error": str(exc),
+                            }
                         if (
                             report.get("status") not in ("network_error", "error")
                             or attempt == self.settings.item_retries
                         ):
                             break
+                        report_progress("retry")
                         await asyncio.sleep(self.settings.retry_delay_seconds)
+                    report_progress("finished", "success" if success else "failed")
+                    progress.reset(token)
                     item.update(status="success" if success else "failed", result=report)
-                    self.state.record_result(item["key"], report)
-                    self.state.save_task(task)
+                    if request.type != "actor_images":
+                        self.state.record_result(item["key"], report)
+                    self.state.save_task(task, item)
                     for row in self.state.movies_data:
-                        if row["key"] == item["key"]:
+                        if row["key"] == item["key"] and request.type != "actor_images":
                             row["status"] = (
                                 "translation_partial"
                                 if report.get("translation_errors")
@@ -248,7 +287,7 @@ class TaskRunner:
                                 if success
                                 else "failed"
                             )
-                    write_json(self.state.root / "scan.json", self.state.movies_data)
+                    self.state.save_catalog(self.state.movies_data)
                     logger.info("番号 %s：%s", item["key"], report.get("status"))
 
                 for item in task["items"]:
@@ -270,15 +309,33 @@ class TaskRunner:
             task.update(status="finished", error=str(exc), finished_at=now())
             self.state.save_task(task)
 
-    async def process(self, scraper, movie, names, request):
+    async def process(self, scraper, movie, names, request, portraits):
         path = existing_nfo(self.output, movie)
+        if request.type == "actor_images":
+            metadata = read_nfo(path, movie.key)
+            actors = [
+                actor
+                for actor in metadata.actors
+                if not request.actor_names or (names.resolve(actor.name) or actor.name) in request.actor_names
+            ]
+            images = await portraits.save(actors, replace=request.replace_avatars)
+            return {"key": movie.key, "status": "found", "images": images}
         if request.type == "scrape_missing" and path.is_file() and not request.images:
+            report_progress("metadata")
             metadata = read_nfo(path, movie.key)
             issues = normalize_actors(metadata, names)
+            if self.settings.translation.enabled:
+                report_progress("translation")
             errors = await self.translator.metadata(metadata)
             content = nfo_bytes(metadata)
             write_nfos(self.output, movie, content)
-            return {"key": movie.key, "status": "found", "actor_issues": issues, "translation_errors": errors}
+            return {
+                "key": movie.key,
+                "status": "found",
+                "actor_issues": issues,
+                "translation_errors": errors,
+                "portraits": await portraits.save(metadata.actors) if self.settings.actor_images else [],
+            }
         return await scrape_movie(
             scraper,
             movie,
@@ -291,6 +348,7 @@ class TaskRunner:
             enrich=request.enrich,
             images=request.images,
             missing_only=request.type == "scrape_missing",
+            portraits=portraits if self.settings.actor_images else None,
         )
 
     async def watch(self):
@@ -310,5 +368,6 @@ class TaskRunner:
         if self.running:
             await asyncio.gather(*list(self.running.values()), return_exceptions=True)
         await self.translator.close()
+        self.state.close()
         self.process_lock.close()
         cleanup()

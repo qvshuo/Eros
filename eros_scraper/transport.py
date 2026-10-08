@@ -15,6 +15,7 @@ from scrapling.fetchers import FetcherSession
 from scrapling.parser import Selector
 
 from .config import Settings
+from .logging_setup import report_progress
 from .models import JsonValue, RawDocument, SourceId, Status
 
 SOLVER_TIMEOUT_SECONDS = 45
@@ -293,6 +294,7 @@ class WebClient:
         return payload
 
     async def _render(self, source: SourceId, url: str, cookies: dict[str, str]) -> Page:
+        report_progress("challenge", source=source)
         key = (source, urlparse(url).netloc)
         async with self._solver_limit:
             async with self._solver_lock:

@@ -67,8 +67,9 @@ def nfo_bytes(metadata: Metadata) -> bytes:
     for actor in metadata.actors:
         if actor.name.strip():
             ET.SubElement(ET.SubElement(root, "actor"), "name").text = xml_text(actor.name)
+    for genre in metadata.tags if metadata.genres is None else metadata.genres:
+        add("genre", genre)
     for tag in metadata.tags:
-        add("genre", tag)
         add("tag", tag)
     ET.indent(root)
     return ET.tostring(root, encoding="utf-8", xml_declaration=True)
@@ -112,5 +113,6 @@ def read_nfo(path: Path, number: str) -> Metadata:
         directors=[e.text for e in root.findall("director") if e.text],
         actors=[Actor(name=e.findtext("name")) for e in root.findall("actor") if e.findtext("name")],
         tags=[e.text for e in root.findall("tag") if e.text],
+        genres=[e.text for e in root.findall("genre") if e.text],
         source_url="",
     )

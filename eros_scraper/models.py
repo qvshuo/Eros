@@ -75,6 +75,7 @@ class Metadata(BaseModel):
     directors: list[str] = Field(default_factory=list)
     actors: list[Actor] = Field(default_factory=list)
     tags: list[str] = Field(default_factory=list)
+    genres: list[str] | None = None
     artwork: list[Artwork] = Field(default_factory=list)
     classification: Classification = Field(default_factory=Classification)
     external_id: str | None = None

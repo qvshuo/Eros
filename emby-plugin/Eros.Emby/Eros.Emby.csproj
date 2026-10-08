@@ -4,8 +4,8 @@
     <AssemblyName>Eros</AssemblyName>
     <LangVersion>latest</LangVersion>
     <Nullable>enable</Nullable>
-    <Version>0.2.0</Version>
-    <Description>Local Eros metadata and images for Emby movies</Description>
+    <Version>0.3.0</Version>
+    <Description>Local Eros metadata and images for Emby movies and actors</Description>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <NoWarn>$(NoWarn);1591</NoWarn>
   </PropertyGroup>

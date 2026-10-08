@@ -5,7 +5,7 @@ from pathlib import Path
 from .config import Settings
 
 
-def load_settings(path: Path = Path("/data/config.toml")) -> Settings:
+def load_settings(path: Path = Path("/data/config.json")) -> Settings:
     settings = Settings.load(path) if path.is_file() else Settings()
     if settings.metadata_root is None:
         settings.metadata_root = Path("/data/metadata")
@@ -22,7 +22,7 @@ def main() -> None:
     uvicorn.run(
         create_app(
             load_settings(),
-            config_path=Path("/data/config.toml"),
+            config_path=Path("/data/config.json"),
             directories=Directories([Path("/media")], Path("/data/metadata")),
         ),
         host="0.0.0.0",

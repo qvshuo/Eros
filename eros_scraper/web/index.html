@@ -52,6 +52,7 @@
    <div aria-live="polite" class="notice" hidden="" id="notice" role="status">
    </div>
    <section aria-labelledby="tab-library" id="panel-library" role="tabpanel">
+    <div id="movie-overview">
     <div class="scan-area">
      <p id="scan-summary">
       等待扫描作品
@@ -227,6 +228,40 @@
       </div>
      </footer>
     </div>
+    </div>
+    <div hidden id="movie-page">
+     <button class="button quiet secondary-back" id="movie-back">← 返回</button>
+     <div class="section-heading secondary-heading">
+      <div><h2 id="movie-detail-title"></h2><p id="movie-detail-summary"></p></div>
+      <span id="movie-detail-status"></span>
+     </div>
+     <div id="movie-loading" class="empty">正在读取…</div>
+     <div hidden id="movie-content" class="movie-layout">
+      <div class="movie-media library-card">
+       <div class="section-heading"><h3>封面</h3><button class="button" id="crop-open" type="button">裁剪</button></div>
+       <img id="movie-poster" alt="作品封面" hidden>
+       <div id="poster-empty" class="empty">暂无封面</div>
+       <div class="image-gallery" id="movie-gallery"></div>
+       <div id="crop-panel" hidden>
+        <label>原始图片<select id="crop-source" aria-label="裁剪原图"></select></label>
+        <div class="crop-actions"><button class="button" id="crop-detect" type="button">人脸裁剪</button><button class="button quiet" id="crop-center" type="button">居中裁剪</button></div>
+        <canvas id="crop-original" aria-label="原始图片与裁剪范围"></canvas>
+        <img id="crop-preview" alt="裁剪预览" hidden>
+        <p id="crop-status" class="muted" role="status"></p>
+        <label>横向位置<input id="crop-x" type="range" min="0" step="1"></label>
+        <label>纵向位置<input id="crop-y" type="range" min="0" step="1"></label>
+        <div class="dialog-actions"><button class="button quiet" id="crop-close" type="button">关闭</button><button class="button primary" id="crop-save" type="button" disabled>保存</button></div>
+       </div>
+      </div>
+      <form id="movie-form" class="library-card movie-information">
+       <div class="section-heading"><h3>作品信息</h3><button class="button primary" id="movie-save" type="submit" disabled>保存</button></div>
+       <div id="movie-fields" class="form-grid"></div>
+       <div id="movie-files" class="detail-files"></div>
+       <div id="movie-process" class="detail-process"></div>
+       <div id="movie-diagnostics" class="detail-diagnostics"></div>
+      </form>
+     </div>
+    </div>
    </section>
    <section aria-labelledby="tab-tasks" hidden="" id="panel-tasks" role="tabpanel">
     <div id="task-overview">
@@ -304,10 +339,10 @@
      </div>
     </div>
     <div hidden="" id="task-detail">
-     <button class="button quiet" id="task-back">
+     <button class="button quiet secondary-back" id="task-back">
       ← 返回任务
      </button>
-     <div class="section-heading task-detail-heading">
+     <div class="section-heading secondary-heading">
       <div>
        <h2 id="task-detail-title">
        </h2>
@@ -371,8 +406,9 @@
    <section aria-labelledby="tab-actors" hidden="" id="panel-actors" role="tabpanel">
     <div class="section-heading">
      <p id="actors-summary">
-      0 个待确认名称
+      0 位演员
      </p>
+     <button class="button" id="actor-fill">补齐头像</button>
     </div>
     <div class="library-card">
      <div class="library-tools">
@@ -382,10 +418,11 @@
        </span>
        <input id="actor-search" placeholder="搜索演员" type="search"/>
       </label>
-      <select aria-label="筛选演员" id="actor-filter">
+      <select aria-label="筛选名称状态" id="actor-filter">
        <option value="all">
-        全部状态
+        全部名称
        </option>
+       <option value="known">已收录</option>
        <option value="ambiguous">
         共享名称
        </option>
@@ -393,23 +430,30 @@
         未收录
        </option>
       </select>
+      <select aria-label="筛选头像状态" id="actor-portrait-filter">
+       <option value="all">全部头像</option>
+       <option value="missing">缺少头像</option>
+       <option value="ready">已有头像</option>
+      </select>
      </div>
      <div class="table-scroll">
       <table class="actors-table">
        <thead>
         <tr>
+         <th scope="col">头像</th>
          <th scope="col">
           演员名称
          </th>
          <th scope="col">
-          状态
+          名称状态
          </th>
          <th scope="col">
           候选主名
          </th>
          <th scope="col">
-          出现次数
+          作品数
          </th>
+         <th scope="col">操作</th>
         </tr>
        </thead>
        <tbody id="actors">
@@ -463,6 +507,7 @@
       <h3>
        抓取
       </h3>
+      <label class="toggle"><input id="actor-images" type="checkbox"/><span>补齐演员头像</span></label>
       <div class="form-grid">
        <label>
         作品扫描间隔（秒）
@@ -646,16 +691,6 @@
     </button>
    </div>
   </dialog>
-  <dialog id="movie-dialog">
-   <div class="dialog-heading">
-    <h2 id="movie-detail-title">
-    </h2>
-    <button aria-label="关闭" class="button quiet" id="movie-detail-close">
-     ×
-    </button>
-   </div>
-   <div id="movie-detail">
-   </div>
-  </dialog>
+
  </body>
 </html>
