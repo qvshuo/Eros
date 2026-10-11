@@ -1,0 +1,672 @@
+<!DOCTYPE html>
+<html data-theme="light" lang="zh-CN">
+ <head>
+  <meta charset="utf-8"/>
+  <meta content="width=device-width,initial-scale=1" name="viewport"/>
+  <meta content="light dark" name="color-scheme"/>
+  <title>
+   Eros
+  </title>
+  <script>
+   document.documentElement.dataset.theme=matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'
+  </script>
+  <link href="/assets/favicon.svg" rel="icon" type="image/svg+xml"/>
+  <link href="/assets/favicon.ico" rel="alternate icon" type="image/x-icon" sizes="16x16 32x32 48x48 64x64"/>
+  <link href="/assets/main.css" rel="stylesheet"/>
+  <script defer="" src="/assets/selects.js">
+  </script>
+  <script defer="" src="/assets/main.js">
+  </script>
+ </head>
+ <body>
+  <main>
+   <header class="workspace-brand">
+    <h1>
+     <a class="workspace-name" href="#library">
+      Eros
+     </a>
+    </h1>
+    <p class="workspace-slogan">
+     为视频获取信息与图片。
+    </p>
+   </header>
+   <div class="workspace-nav">
+    <nav aria-label="工作区" class="tabs" role="tablist">
+     <button aria-controls="panel-library" aria-selected="true" data-tab="library" id="tab-library" role="tab">
+      作品库
+     </button>
+     <button aria-controls="panel-tasks" aria-selected="false" data-tab="tasks" id="tab-tasks" role="tab" tabindex="-1">
+      任务
+      <span class="tab-count" hidden="" id="task-count">
+       0
+      </span>
+     </button>
+     <button aria-controls="panel-actors" aria-selected="false" data-tab="actors" id="tab-actors" role="tab" tabindex="-1">
+      演员
+     </button>
+     <button aria-controls="panel-settings" aria-selected="false" data-tab="settings" id="tab-settings" role="tab" tabindex="-1">
+      设置
+     </button>
+    </nav>
+   </div>
+   <div aria-live="polite" class="notice" hidden="" id="notice" role="status">
+   </div>
+   <section aria-labelledby="tab-library" id="panel-library" role="tabpanel">
+    <div id="work-overview">
+    <div class="scan-area">
+     <p id="scan-summary">
+      尚未查找作品
+     </p>
+     <div class="scan-controls">
+      <p aria-live="polite" class="inline-feedback" id="scan-feedback" role="status">
+      </p>
+      <button class="button" id="scan">
+       查找作品
+      </button>
+     </div>
+    </div>
+    <div class="action-card">
+     <div class="action-controls">
+      <label>
+       <span class="sr-only">
+        操作
+       </span>
+       <select id="operation">
+        <option title="补充缺少的信息，保留已有内容。" value="fill_missing">
+         补齐信息
+        </option>
+        <option title="重新获取信息，失败保留原内容。" value="refresh">
+         重新获取
+        </option>
+        <option title="只从所选网站获取信息。" value="fetch_source">
+         选择网站
+        </option>
+       </select>
+      </label>
+      <label hidden="" id="source-field">
+       <span class="sr-only">
+        网站
+       </span>
+       <select id="source">
+        <option value="javdb">
+         JavDB
+        </option>
+        <option value="dmm">
+         DMM
+        </option>
+        <option value="javbus">
+         JavBus
+        </option>
+        <option value="fc2">
+         FC2 官方
+        </option>
+        <option value="avsox">
+         AVSOX
+        </option>
+       </select>
+      </label>
+      <button class="button primary" disabled="" id="execute">
+       开始
+      </button>
+     </div>
+     <p class="inline-hint" hidden="" id="action-help">
+     </p>
+     <div class="source-identity" hidden="" id="precise">
+      <div class="form-grid">
+       <label>
+        站内编号
+        <input id="work-id" placeholder="可选"/>
+       </label>
+       <label>
+        作品链接
+        <input id="work-url" placeholder="https://…" type="url"/>
+       </label>
+      </div>
+     </div>
+    </div>
+    <div class="library-card">
+     <div class="library-tools">
+      <label class="search">
+       <span class="sr-only">
+        搜索作品
+       </span>
+       <input autocomplete="off" id="search" placeholder="搜索作品" type="search"/>
+      </label>
+      <select aria-label="筛选状态" id="status-filter">
+       <option value="all">
+        全部状态
+       </option>
+       <option value="todo">
+        未完成
+       </option>
+       <option value="running">
+        进行中
+       </option>
+       <option value="scraped">
+        已完成
+       </option>
+       <option value="invalid">
+        需要检查
+       </option>
+      </select>
+      <select aria-label="筛选分类" id="category-filter">
+       <option value="all">
+        全部分类
+       </option>
+       <option value="censored">
+        有码
+       </option>
+       <option value="uncensored">
+        无码
+       </option>
+       <option value="fc2">
+        FC2
+       </option>
+       <option value="unknown">
+        未分类
+       </option>
+      </select>
+     </div>
+     <div class="selection-bar">
+      <div class="selection-actions"><button class="button quiet" id="select-filtered">全选</button><button class="button quiet" id="invert-selection">反选</button><button class="button quiet" id="clear-selection">清除</button></div>
+      <span class="muted" id="selection-summary">已选 0 部作品</span>
+     </div>
+     <div class="table-scroll">
+      <table>
+       <thead>
+        <tr>
+         <th class="check-cell" scope="col">
+          <label class="checkbox-hit">
+           <input aria-label="选择本页" id="select-page" type="checkbox"/>
+          </label>
+         </th>
+         <th scope="col">
+          作品
+         </th>
+         <th scope="col">
+          分类
+         </th>
+         <th scope="col">
+          状态
+         </th>
+        </tr>
+       </thead>
+       <tbody id="works">
+       </tbody>
+      </table>
+     </div>
+     <div class="empty" hidden="" id="work-empty">
+      暂无
+     </div>
+     <footer class="pagination">
+      <span id="page-summary">
+       每页 100 条
+      </span>
+      <div>
+       <button aria-label="上一页" class="button quiet" id="page-prev">
+        上一页
+       </button>
+       <label>
+        <span class="sr-only">
+         页码
+        </span>
+        <select aria-label="页码" id="page-number">
+         <option value="1">
+          第 1 页
+         </option>
+        </select>
+       </label>
+       <button aria-label="下一页" class="button quiet" id="page-next">
+        下一页
+       </button>
+      </div>
+     </footer>
+    </div>
+    </div>
+    <div hidden id="work-page">
+     <button class="button secondary-back" id="work-back">返回</button>
+     <div class="section-heading secondary-heading">
+      <div><h2 id="work-detail-title"></h2><p id="work-detail-summary"></p></div>
+      <span id="work-detail-status"></span>
+     </div>
+     <div id="work-loading" class="empty">正在读取…</div>
+     <div hidden id="work-content" class="work-layout">
+      <div class="work-media library-card">
+       <div class="section-heading"><h3>封面</h3><button class="button" id="crop-open" type="button">裁剪</button></div>
+       <img id="work-poster" alt="作品封面" hidden>
+       <div id="poster-empty" class="empty">暂无封面</div>
+       <div class="image-gallery" id="work-gallery"></div>
+       <div id="crop-panel" hidden>
+        <label>原始图片<select id="crop-source" aria-label="裁剪原图"></select></label>
+        <div class="crop-actions"><button class="button" id="crop-detect" type="button">自动裁剪</button><button class="button quiet" id="crop-center" type="button">居中裁剪</button></div>
+        <canvas id="crop-original" aria-label="原始图片与裁剪范围"></canvas>
+        <img id="crop-preview" alt="裁剪预览" hidden>
+        <p id="crop-status" class="muted" role="status"></p>
+        <label>横向位置<input id="crop-x" type="range" min="0" step="1"></label>
+        <label>纵向位置<input id="crop-y" type="range" min="0" step="1"></label>
+        <div class="dialog-actions"><button class="button quiet" id="crop-close" type="button">关闭</button><button class="button primary" id="crop-save" type="button" disabled>保存</button></div>
+       </div>
+      </div>
+      <form id="work-form" class="library-card work-information">
+       <div class="section-heading"><h3>作品信息</h3><button class="button primary" id="work-save" type="submit" disabled>保存</button></div>
+       <div id="work-fields" class="form-grid"></div>
+       <div id="work-files" class="detail-files"></div>
+       <div id="work-diagnostics" class="detail-diagnostics" hidden></div>
+       <div id="work-process" class="detail-process" hidden></div>
+      </form>
+     </div>
+    </div>
+   </section>
+   <section aria-labelledby="tab-tasks" hidden="" id="panel-tasks" role="tabpanel">
+    <div id="task-overview">
+     <div class="section-heading">
+      <p id="tasks-summary">
+       0 个任务
+      </p>
+     </div>
+     <div class="library-card">
+      <div class="library-tools">
+       <label class="search">
+        <span class="sr-only">
+         搜索任务
+        </span>
+        <input id="task-search" placeholder="搜索任务" type="search"/>
+       </label>
+       <select aria-label="筛选任务" id="task-filter">
+        <option value="all">
+         全部任务
+        </option>
+        <option value="pending">
+         等待中
+        </option>
+        <option value="running">
+         进行中
+        </option>
+        <option value="finished">已结束</option><option value="cancelled">已取消</option>
+       </select>
+      </div>
+      <div class="table-scroll">
+       <table class="tasks-table">
+        <thead>
+         <tr>
+          <th scope="col">序号</th>
+          <th scope="col">
+           创建时间
+          </th>
+          <th scope="col">
+           任务类型
+          </th>
+          <th scope="col">
+           作品数量
+          </th>
+          <th scope="col">
+           进度
+          </th>
+          <th scope="col">
+           状态
+          </th>
+          <th scope="col">
+           操作
+          </th>
+         </tr>
+        </thead>
+        <tbody id="tasks">
+        </tbody>
+       </table>
+      </div>
+      <div class="empty" hidden="" id="task-empty">
+       暂无
+      </div>
+      <footer class="pagination" id="task-pagination">
+       <span id="task-page-summary">
+       </span>
+       <div>
+        <button class="button quiet" id="task-prev">
+         上一页
+        </button>
+        <button class="button quiet" id="task-next">
+         下一页
+        </button>
+       </div>
+      </footer>
+     </div>
+    </div>
+    <div hidden="" id="task-detail">
+     <button class="button secondary-back" id="task-back">
+      返回
+     </button>
+     <div class="section-heading secondary-heading">
+      <div>
+       <h2 id="task-detail-title">
+       </h2>
+       <p id="task-detail-summary">
+       </p>
+      </div>
+      <span id="task-detail-status">
+      </span>
+     </div>
+     <div class="library-card">
+      <div class="library-tools">
+       <label class="search">
+        <span class="sr-only">
+         搜索任务作品
+        </span>
+        <input id="result-search" placeholder="搜索作品" type="search"/>
+       </label>
+       <select aria-label="筛选结果" id="result-filter">
+        <option value="all">
+         全部结果
+        </option>
+        <option value="failed">
+         获取失败
+        </option>
+        <option value="success">
+         已完成
+        </option>
+        <option value="pending">
+         等待中
+        </option>
+        <option value="running">
+         进行中
+        </option>
+        <option value="cancelled">已取消</option>
+       </select>
+      </div>
+      <div class="task-results" id="task-results">
+      </div>
+      <div class="empty" hidden="" id="result-empty">
+       暂无
+      </div>
+      <footer class="pagination">
+       <span id="result-summary">
+       </span>
+       <div>
+        <button class="button quiet" id="result-prev">
+         上一页
+        </button>
+        <select aria-label="结果页码" id="result-page">
+         <option value="1">
+          第 1 页
+         </option>
+        </select>
+        <button class="button quiet" id="result-next">
+         下一页
+        </button>
+       </div>
+      </footer>
+     </div>
+    </div>
+   </section>
+   <section aria-labelledby="tab-actors" hidden="" id="panel-actors" role="tabpanel">
+    <div class="section-heading">
+     <p id="actors-summary">
+      0 位演员
+     </p>
+     <button class="button" id="actor-fill">补齐头像</button>
+    </div>
+    <div class="library-card">
+     <div class="library-tools">
+      <label class="search">
+       <span class="sr-only">
+        搜索演员
+       </span>
+       <input id="actor-search" placeholder="搜索演员" type="search"/>
+      </label>
+      <select aria-label="筛选头像状态" id="actor-portrait-filter">
+       <option value="all">全部头像</option>
+       <option value="missing">缺少头像</option>
+       <option value="ready">已有头像</option>
+      </select>
+     </div>
+     <div class="table-scroll">
+      <table class="actors-table">
+       <thead>
+        <tr>
+         <th scope="col">头像</th>
+         <th scope="col">
+          演员
+         </th>
+         <th scope="col">
+          作品数
+         </th>
+         <th scope="col">操作</th>
+        </tr>
+       </thead>
+       <tbody id="actors">
+       </tbody>
+      </table>
+     </div>
+     <div class="empty" hidden="" id="actor-empty">
+      暂无
+     </div>
+     <footer class="pagination">
+      <span id="actor-page-summary">
+      </span>
+      <div>
+       <button class="button quiet" id="actor-prev">
+        上一页
+       </button>
+       <button class="button quiet" id="actor-next">
+        下一页
+       </button>
+      </div>
+     </footer>
+    </div>
+   </section>
+   <section aria-labelledby="tab-settings" hidden="" id="panel-settings" role="tabpanel">
+    <form id="settings">
+     <p id="settings-help" class="inline-hint" role="status" hidden></p>
+     <section class="settings-card">
+      <h3>
+       文件夹
+      </h3>
+      <label class="path-field">
+       作品文件夹
+      </label>
+      <div class="path-list" id="media-roots">
+      </div>
+      <button class="button quiet" id="add-media-root" type="button">
+       添加文件夹
+      </button>
+      <div class="path-field">
+       <label for="metadata-root">
+        信息文件夹
+       </label>
+       <div class="path-row">
+        <input id="metadata-root" placeholder="/data/metadata"/>
+        <button class="button" id="browse-metadata" type="button">
+         选择
+        </button>
+       </div>
+      </div>
+     </section>
+     <section class="settings-card">
+      <div class="card-heading"><h3>获取信息</h3><label class="toggle"><input id="actor-photos" type="checkbox"/><span>获取演员头像</span></label></div>
+      <div class="form-grid">
+       <label>
+        检查间隔
+        <input id="interval" min="5" required="" step="5" type="number"/>
+       </label>
+       <label>
+        再试次数
+        <input id="item-retries" max="3" min="0" required="" type="number"/>
+       </label>
+      </div>
+     </section>
+     <section class="settings-card">
+      <div class="card-heading">
+       <h3>
+        翻译
+       </h3>
+       <label class="toggle">
+        <input id="translation" type="checkbox"/>
+        <span>
+         自动翻译
+        </span>
+       </label>
+      </div>
+      <div class="form-grid">
+       <label>
+        接口地址
+        <input id="endpoint" placeholder="https://api.example.com/v1" required="" type="url"/>
+       </label>
+       <label>
+        模型
+        <input id="model"/>
+       </label>
+       <label class="span-full">
+        接口密钥
+        <input autocomplete="off" id="api-key" type="text"/>
+       </label>
+       <label>
+        等待秒数
+        <input id="translation-timeout" min="1" required="" type="number"/>
+       </label>
+       <label>
+        间隔秒数
+        <input id="translation-interval" min="0" required="" type="number"/>
+       </label>
+      </div>
+     </section>
+     <section class="settings-card">
+      <h3>
+       网站
+      </h3>
+      <div class="table-scroll sources-scroll">
+       <table class="sources-table">
+        <thead>
+         <tr>
+          <th scope="col">
+           网站
+          </th>
+          <th scope="col">
+           网址
+          </th>
+          <th scope="col">
+           间隔秒数
+          </th>
+          <th scope="col">
+           登录信息
+          </th>
+         </tr>
+        </thead>
+        <tbody id="site-rows">
+        </tbody>
+       </table>
+      </div>
+      <div class="settings-divider">
+       <h4>
+        访问
+       </h4>
+       <div class="form-grid">
+        <label>
+         等待秒数
+         <input id="timeout" min="1" required="" type="number"/>
+        </label>
+        <label>
+         再试次数
+         <input id="retries" max="3" min="0" required="" type="number"/>
+        </label>
+        <label>
+         再试秒数
+         <input id="retry-delay" min="1" required="" type="number"/>
+        </label>
+       </div>
+      </div>
+      <div class="settings-divider">
+       <h4>
+        访问助手
+       </h4>
+       <div class="form-grid">
+        <label class="span-full">
+         服务地址
+         <input id="solver-url" placeholder="留空关闭" type="url"/>
+        </label>
+       </div>
+      </div>
+      <div class="settings-divider">
+       <h4>
+        网站顺序
+       </h4>
+       <div class="form-grid">
+        <label>
+         有码
+         <input id="route-censored"/>
+        </label>
+        <label>
+         无码
+         <input id="route-uncensored"/>
+        </label>
+        <label>
+         FC2
+         <input id="route-fc2"/>
+        </label>
+        <label>
+         未分类
+         <input id="route-unknown"/>
+        </label>
+       </div>
+      </div>
+     </section>
+     <footer class="settings-footer">
+      <button class="button primary" disabled="" id="save-settings" type="submit">
+       保存
+      </button>
+     </footer>
+    </form>
+   </section>
+  </main>
+  <dialog id="confirm-dialog">
+   <form method="dialog">
+    <h2 id="confirm-title">
+     确认操作
+    </h2>
+    <p id="confirm-description">
+    </p>
+    <div class="dialog-actions">
+     <button class="button" value="cancel">
+      取消
+     </button>
+     <button class="button primary" value="confirm">
+      确认开始
+     </button>
+    </div>
+   </form>
+  </dialog>
+  <dialog id="directory-dialog">
+   <div class="dialog-heading">
+    <h2 id="directory-title">
+     选择文件夹
+    </h2>
+    <button aria-label="关闭" class="button quiet" id="directory-close" type="button">
+     ×
+    </button>
+   </div>
+   <div class="directory-toolbar">
+    <button class="button quiet" id="directory-up">
+     上一级
+    </button>
+    <input id="directory-path" aria-label="文件夹路径" placeholder="输入文件夹路径"/><button class="button" id="directory-go" type="button">转到</button>
+   </div>
+   <input id="directory-search" type="search" aria-label="搜索文件夹" placeholder="筛选文件夹"/>
+   <div id="directory-list">
+   </div>
+   <p class="help error" hidden="" id="directory-error">
+   </p>
+   <div class="path-row" hidden="" id="directory-create">
+    <input id="new-folder-name" placeholder="文件夹名称"/>
+    <button class="button" id="create-folder">
+     新建
+    </button>
+   </div>
+   <p id="directory-selected" class="muted">已选文件夹：无</p>
+   <div class="dialog-actions">
+    <button class="button quiet" id="directory-cancel" type="button">取消</button>
+    <button class="button primary" id="directory-choose">
+     确认
+    </button>
+   </div>
+  </dialog>
+
+ </body>
+</html>

@@ -1,8 +1,8 @@
 **
 !Dockerfile
 !requirements.txt
-!eros_scraper/
-!eros_scraper/**
+!eros/
+!eros/**
 !emby-plugin/
 !emby-plugin/**
 **/__pycache__/

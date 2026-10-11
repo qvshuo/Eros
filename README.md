@@ -1,6 +1,6 @@
 # Eros
 
-刮削视频或 STRM 的 JAV 元数据，由 Emby 插件读取。
+获取 JAV 视频的信息与图片，供 Emby 展示。
 
 ## 部署
 
@@ -20,7 +20,7 @@ docker compose up -d --build
 
 ## 使用
 
-1. 设置作品扫描目录并执行刮削。Eros 按视频或 STRM 所在目录名（番号）获取元数据，将 NFO 和图片保存到 `data/metadata`。作品详情支持预览并保存信息修改和封面裁剪。
+1. 选择作品和信息文件夹，按视频或 STRM 的父文件夹名获取信息。点击作品可编辑信息、裁剪封面和查看进度。
 
 2. 下载 [Eros.dll](emby-plugin/Eros.dll?raw=true)，放入 Emby 插件目录，升级时先移除旧版插件 DLL。Docker 部署时，若配置挂载为 `/path/to/emby/config:/config`，则放入 `/path/to/emby/config/plugins/Eros.dll`。
 
@@ -31,4 +31,4 @@ docker compose up -d --build
      - /path/to/Eros/data/metadata:/eros-metadata:ro
    ```
 
-4. 重启 Emby，在插件中确认元数据目录为 `/eros-metadata`，然后刷新媒体库及演员图片。可在演员页补齐或更新 [gfriends](https://github.com/gfriends/gfriends) 头像。
+4. 重启 Emby，在插件中确认信息文件夹为 `/eros-metadata`，然后刷新媒体库及演员图片。可在演员页补齐或更新 [gfriends](https://github.com/gfriends/gfriends) 头像。

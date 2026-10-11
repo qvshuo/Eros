@@ -1,6 +1,6 @@
 services:
   eros:
-    image: eros:0.3.0
+    image: eros:0.4.0
     build: .
     restart: unless-stopped
     ports:
